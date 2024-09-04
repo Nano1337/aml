@@ -143,8 +143,9 @@ if __name__ == "__main__":
     from sklearn.metrics import accuracy_score
     from sklearn.preprocessing import StandardScaler
 
+    # Create sample dataset for testing
     xs, ys = make_classification(
-        n_features=3,
+        n_features=10,
         n_classes=2,
         n_samples=100_000,
         n_clusters_per_class=1,
@@ -152,29 +153,22 @@ if __name__ == "__main__":
         random_state=42,
         flip_y=0.1
     )
-
     scaler = StandardScaler()
     xs = scaler.fit_transform(xs)
-
     X_train, X_val, Y_train, Y_val = train_test_split(xs, ys, test_size=0.2, random_state=42)
-
     model = LogisticRegression(X_train, Y_train, X_val, Y_val)
 
     # Test initialization
-    print("Testing initialization...")
-    model = LogisticRegression(X_train, Y_train, X_val, Y_val)
+    print("Testing initialization:")
     w = model.initialization()
-    print(f"w shape: {w.shape}")
-
-    # Generate a large number of random input vectors
     num_test_vectors = 10000
     test_vectors = jax.random.normal(jax.random.PRNGKey(5678), (num_test_vectors, model.D - 1))  # -1 because X_train includes bias
     dot_products = np.dot(test_vectors, w[:-1]) #  test_vectors @ w[:-1]  # Exclude the bias term from w
     mean_dot_product = np.mean(dot_products)
     variance_dot_product = np.var(dot_products)
-    print(f"Mean: {mean_dot_product}, Variance: {variance_dot_product}")
+    print(f"   Mean: {mean_dot_product}, Variance: {variance_dot_product}")
     # Additional test: verify that w is unit length
-    print(f"Is w unit length? {np.abs(np.linalg.norm(w) - 1) < 1e-6}")
+    print(f"   Is w unit length? {np.abs(np.linalg.norm(w) - 1) < 1e-6}")
 
 
     # # test train_loss_and_grad
