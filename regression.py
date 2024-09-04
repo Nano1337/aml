@@ -139,12 +139,34 @@ class LogisticRegression:
     Note: this requires computing the Hessian for logistic regression, and solving a linear system.
     The expected inputs and outputs are the same as in `train_loss_and_grad` (except no reduce).
     '''
-    def train_loss_and_newton(self, w, data_samples):
-        # TODO: compute gradient
-        gradient = 0
-        hessian = jax.hessian(lambda w: self.train_loss(w), argnums=0)(w)
+    def train_loss_and_newton(self, w, data_samples=None):
+        if data_samples is None:
+            X = self.X_train
+            Y = self.Y_train
+            N = self.N
+        else:
+            # Ensure data_samples is an array of integers
+            data_samples = np.array(data_samples, dtype=np.int32)
+            X = self.X_train[data_samples]
+            Y = self.Y_train[data_samples]
+            N = len(data_samples)
 
-        newton_direction = solve(hessian, -gradient)
+        # define single sample loss function
+        def single_sample_loss_fn(w, X, Y):
+            logits = X @ w
+            log_likelihood = jax.nn.log_sigmoid(logits) * Y + jax.nn.log_sigmoid(-logits) * (1 - Y)
+            return -np.mean(log_likelihood) + 0.5 * self.beta * np.sum(w**2)
+
+        # vectorize functions
+        loss_fn = jax.vmap(single_sample_loss_fn, in_axes=(None, 0, 0))
+        grad_fn = jax.vmap(jax.grad(single_sample_loss_fn), in_axes=(None, 0, 0))
+        hess_fn = jax.vmap(jax.hessian(single_sample_loss_fn), in_axes=(None, 0, 0))
+
+        loss, grad, hessian = loss_fn(w, X, Y), grad_fn(w, X, Y), hess_fn(w, X, Y)
+        loss, grad, hessian = np.mean(loss), np.mean(grad, axis=0), np.mean(hessian, axis=0)
+        newton_dir = solve(hessian, grad)
+        
+        return loss, newton_dir
     #
 #
 
@@ -203,13 +225,13 @@ if __name__ == "__main__":
     print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
     
 
-    # # test train_loss_and_grad
-    # num_samples = 1000  # You can adjust this number as needed
-    # key = jax.random.PRNGKey(0)  # Use a fixed seed for reproducibility
-    # random_indices = jax.random.choice(key, model.N, shape=(num_samples,), replace=False)
-    # data_samples = (model.X_train[random_indices], model.Y_train[random_indices])
+    # Test train loss and grad: 
+    print("Testing Newton loss and grad: ")
+    print(f"    With reduction:")
+    loss, grad = model.train_loss_and_newton(w)
+    print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
+    print(f"    With batch indices")
+    random_indices = [0,4,2,3,65,1234,64]
+    loss, grad = model.train_loss_and_newton(w, data_samples=random_indices)
+    print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
     
-    # loss, gradient = model.train_loss_and_grad(w, data_samples)
-    # print(f"Loss: {loss}")
-    # print(f"Gradient shape: {gradient.shape}")
-    # print(f"Gradient (first few elements): {gradient[:10]}")
