@@ -4,6 +4,7 @@ from jax.random import randint, normal as randn
 import jax.numpy as np 
 from jax.scipy.linalg import eigh, solve
 
+
 '''
 Implement the sigmoid function. Be sure to do this in a vectorized way, since `a` is an arbitrary array.
 '''
@@ -134,21 +135,29 @@ class LogisticRegression:
 
 if __name__ == "__main__":
 
-    def create_random_dataset(N, D, key):
-        key1, key2 = jax.random.split(key)
-        X = jax.random.normal(key1, (N, D))
-        Y = jax.random.randint(key2, (N,), 0, 2)
-        return X, Y
+    """
+    Personal Testing Code
+    """
+    from sklearn.datasets import make_classification
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score
+    from sklearn.preprocessing import StandardScaler
 
-    # test sigmoid function
-    X = np.arange(10)
-    print(f"sigmoid test: \nInputs: {X} \nOutputs: {sigmoid(X)}\n")
+    xs, ys = make_classification(
+        n_features=3,
+        n_classes=2,
+        n_samples=100_000,
+        n_clusters_per_class=1,
+        n_informative=1,
+        random_state=42,
+        flip_y=0.1
+    )
 
-    # create LogisticRegression class
-    # create a random dataset
-    key = jax.random.PRNGKey(1234)
-    X_train, Y_train = create_random_dataset(10000, 10, key)
-    X_val, Y_val = create_random_dataset(100, 10, key)
+    scaler = StandardScaler()
+    xs = scaler.fit_transform(xs)
+
+    X_train, X_val, Y_train, Y_val = train_test_split(xs, ys, test_size=0.2, random_state=42)
+
     model = LogisticRegression(X_train, Y_train, X_val, Y_val)
 
     # Test initialization
@@ -160,25 +169,21 @@ if __name__ == "__main__":
     # Generate a large number of random input vectors
     num_test_vectors = 10000
     test_vectors = jax.random.normal(jax.random.PRNGKey(5678), (num_test_vectors, model.D - 1))  # -1 because X_train includes bias
-
-    # Compute dot products
-    dot_products = test_vectors @ w[:-1]  # Exclude the bias term from w
-
-    # Calculate mean of dot products
+    dot_products = np.dot(test_vectors, w[:-1]) #  test_vectors @ w[:-1]  # Exclude the bias term from w
     mean_dot_product = np.mean(dot_products)
-    
-    print(f"Mean dot product: {mean_dot_product}")
-    print(f"Is initialization correct? {np.abs(mean_dot_product - 1) < 1e-2}")
-
+    variance_dot_product = np.var(dot_products)
+    print(f"Mean: {mean_dot_product}, Variance: {variance_dot_product}")
     # Additional test: verify that w is unit length
     print(f"Is w unit length? {np.abs(np.linalg.norm(w) - 1) < 1e-6}")
-    # test train_loss_and_grad
-    num_samples = 1000  # You can adjust this number as needed
-    key = jax.random.PRNGKey(0)  # Use a fixed seed for reproducibility
-    random_indices = jax.random.choice(key, model.N, shape=(num_samples,), replace=False)
-    data_samples = (model.X_train[random_indices], model.Y_train[random_indices])
+
+
+    # # test train_loss_and_grad
+    # num_samples = 1000  # You can adjust this number as needed
+    # key = jax.random.PRNGKey(0)  # Use a fixed seed for reproducibility
+    # random_indices = jax.random.choice(key, model.N, shape=(num_samples,), replace=False)
+    # data_samples = (model.X_train[random_indices], model.Y_train[random_indices])
     
-    loss, gradient = model.train_loss_and_grad(w, data_samples)
-    print(f"Loss: {loss}")
-    print(f"Gradient shape: {gradient.shape}")
-    print(f"Gradient (first few elements): {gradient[:10]}")
+    # loss, gradient = model.train_loss_and_grad(w, data_samples)
+    # print(f"Loss: {loss}")
+    # print(f"Gradient shape: {gradient.shape}")
+    # print(f"Gradient (first few elements): {gradient[:10]}")
