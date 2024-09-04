@@ -59,22 +59,32 @@ class LogisticRegression:
     '''
     def lipschitz_constant(self):
         # 1/4 * eigenvalue_max of X_train^T @ X_train
-        return 0.25 * np.max(eigh(self.X_train.T @ self.X_train)[0])
+        eighnum, _ = eigh(np.dot(self.X_train.T, self.X_train))
+        return 1/4 * np.max(eighnum)
     #
 
     '''
     Compute and return the loss (NLL) averaged over the training dataset, given weight vector `w`.
     '''
-    def train_loss(self, w):
+    def train_loss(self, w, X=None, Y=None):
         # -1/N * sum(y_i * log(sigmoid(w^T x_i)) + (1 - y_i) * log(1 - sigmoid(w^T x_i)))
-        return -1/self.N * np.sum(self.Y_train * np.log(sigmoid(self.X_train @ w)) + (1 - self.Y_train) * np.log(1 - sigmoid(self.X_train @ w)))
+        if X is None or Y is None:
+            X, Y = self.X_train, self.Y_train
+        loss = -1/self.N * np.sum(Y * np.log(sigmoid(np.dot(X, w))) + (1 - Y) * np.log(1 - sigmoid(np.dot(X, w)))) 
+        l2_loss = self.beta * np.linalg.norm(w)**2
+        return loss + l2_loss
+        
     #
 
     '''
     Compute and return the loss (NLL) averaged over the validation dataset, given weight vector `w`.
     '''
     def validation_loss(self, w):
-        return -1/self.N * np.sum(self.Y_val * np.log(sigmoid(self.X_val @ w)) + (1 - self.Y_val) * np.log(1 - sigmoid(self.X_val @ w)))
+        if X is None or Y is None:
+            X, Y = self.X_val, self.Y_val
+        loss = -1/self.N * np.sum(Y * np.log(sigmoid(np.dot(X, w))) + (1 - Y) * np.log(1 - sigmoid(np.dot(X, w)))) 
+        l2_loss = self.beta * np.linalg.norm(w)**2
+        return loss + l2_loss
     #
 
     '''
@@ -104,19 +114,24 @@ class LogisticRegression:
             Y = self.Y_train[data_samples]
             N = len(data_samples)
 
-        activations = sigmoid(X @ w)
-        loss = -1/N * np.sum(Y * np.log(activations) + (1 - Y) * np.log(1 - activations))
-        
-        # Add L2 regularization to the loss
-        loss += 0.5 * self.beta * np.sum(w**2)
-        
-        # Compute gradient
-        gradient = jax.grad(lambda w: loss, argnums=0)(w)
+        # define single sample loss function
+        def single_sample_loss_fn(w, X, Y):
+            logits = X @ w
+            log_likelihood = jax.nn.log_sigmoid(logits) * Y + jax.nn.log_sigmoid(-logits) * (1 - Y)
+            return -np.mean(log_likelihood) + 0.5 * self.beta * np.sum(w**2)
 
-        if not reduce:
-            gradient *= N
-        
-        return loss, gradient
+        # vectorize functions
+        loss_fn = jax.vmap(single_sample_loss_fn, in_axes=(None, 0, 0))
+        grad_fn = jax.vmap(jax.grad(single_sample_loss_fn), in_axes=(None, 0, 0))
+
+        # compute
+        loss = loss_fn(w, X, Y)
+        grads = grad_fn(w, X, Y)
+
+        if reduce: 
+            return np.mean(loss), np.mean(grads, axis=0)
+        else: 
+            return loss, grads
     #
 
     '''
@@ -129,7 +144,7 @@ class LogisticRegression:
         gradient = 0
         hessian = jax.hessian(lambda w: self.train_loss(w), argnums=0)(w)
 
-        newton_direction = solve(hession, -gradient)
+        newton_direction = solve(hessian, -gradient)
     #
 #
 
@@ -140,7 +155,6 @@ if __name__ == "__main__":
     """
     from sklearn.datasets import make_classification
     from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score
     from sklearn.preprocessing import StandardScaler
 
     # Create sample dataset for testing
@@ -170,6 +184,24 @@ if __name__ == "__main__":
     # Additional test: verify that w is unit length
     print(f"   Is w unit length? {np.abs(np.linalg.norm(w) - 1) < 1e-6}")
 
+    # Test calculating lipshitz constant
+    print("Testing Lipshitz calculation: ")
+    l_const = model.lipschitz_constant()
+    print(f"    Lipshitz constant is {l_const}")
+
+    # Test train loss and grad: 
+    print("Testing train loss and grad: ")
+    print(f"    With reduction:")
+    loss, grad = model.train_loss_and_grad(w, reduce=True)
+    print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
+    print(f"    Without reduction:")
+    loss, grad = model.train_loss_and_grad(w, reduce=False)
+    print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
+    print(f"    Without reduction and with batch indices")
+    random_indices = [0,4,2,3,65,1234,64]
+    loss, grad = model.train_loss_and_grad(w, data_samples=random_indices,reduce=False)
+    print(f"    Loss shape is: {loss.shape}, Gradient shape is: {grad.shape}")
+    
 
     # # test train_loss_and_grad
     # num_samples = 1000  # You can adjust this number as needed
