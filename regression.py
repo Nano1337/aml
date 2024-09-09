@@ -115,23 +115,23 @@ class LogisticRegression:
             N = len(data_samples)
 
         # define single sample loss function
-        def single_sample_loss_fn(w, X, Y):
-            logits = X @ w
-            log_likelihood = jax.nn.log_sigmoid(logits) * Y + jax.nn.log_sigmoid(-logits) * (1 - Y)
-            return -np.mean(log_likelihood) + 0.5 * self.beta * np.sum(w**2)
+        def single_sample_loss_fn(w, x, y):
+            logit = np.dot(x, w)
+            log_likelihood = jax.nn.log_sigmoid(logit) * y + jax.nn.log_sigmoid(-logit) * (1 - y)
+            return -log_likelihood + 0.5 * self.beta * np.sum(w**2)
 
         # vectorize functions
         loss_fn = jax.vmap(single_sample_loss_fn, in_axes=(None, 0, 0))
-        grad_fn = jax.vmap(jax.grad(single_sample_loss_fn), in_axes=(None, 0, 0))
+        grad_fn = jax.vmap(jax.grad(single_sample_loss_fn, argnums=0), in_axes=(None, 0, 0))
 
         # compute
-        loss = loss_fn(w, X, Y)
+        losses = loss_fn(w, X, Y)
         grads = grad_fn(w, X, Y)
 
-        if reduce: 
-            return np.mean(loss), np.mean(grads, axis=0)
-        else: 
-            return loss, grads
+        if reduce:
+            return np.mean(losses), np.mean(grads, axis=0)
+        else:
+            return losses, grads
     #
 
     '''
@@ -140,32 +140,22 @@ class LogisticRegression:
     The expected inputs and outputs are the same as in `train_loss_and_grad` (except no reduce).
     '''
     def train_loss_and_newton(self, w, data_samples=None):
-        if data_samples is None:
-            X = self.X_train
-            Y = self.Y_train
-            N = self.N
-        else:
-            # Ensure data_samples is an array of integers
+    
+        if data_samples is None: 
+            data_samples = np.arange(self.N)
+        else: 
             data_samples = np.array(data_samples, dtype=np.int32)
-            X = self.X_train[data_samples]
-            Y = self.Y_train[data_samples]
-            N = len(data_samples)
 
-        # define single sample loss function
-        def single_sample_loss_fn(w, X, Y):
-            logits = X @ w
-            log_likelihood = jax.nn.log_sigmoid(logits) * Y + jax.nn.log_sigmoid(-logits) * (1 - Y)
-            return -np.mean(log_likelihood) + 0.5 * self.beta * np.sum(w**2)
+        X = self.X_train[data_samples]
+        Y = self.Y_train[data_samples]
 
-        # vectorize functions
-        loss_fn = jax.vmap(single_sample_loss_fn, in_axes=(None, 0, 0))
-        grad_fn = jax.vmap(jax.grad(single_sample_loss_fn), in_axes=(None, 0, 0))
-        hess_fn = jax.vmap(jax.hessian(single_sample_loss_fn), in_axes=(None, 0, 0))
+        # compute loss and gradient
+        grad_loss_fn = jax.value_and_grad(self.train_loss)
+        hess_fn = jax.hessian(self.train_loss)
+        loss, grad = grad_loss_fn(w, X, Y)
+        hess = hess_fn(w, X, Y)
 
-        loss, grad, hessian = loss_fn(w, X, Y), grad_fn(w, X, Y), hess_fn(w, X, Y)
-        loss, grad, hessian = np.mean(loss), np.mean(grad, axis=0), np.mean(hessian, axis=0)
-        newton_dir = solve(hessian, grad)
-        
+        newton_dir = solve(hess, grad)
         return loss, newton_dir
     #
 #

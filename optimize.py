@@ -2,6 +2,7 @@ import jax
 from utils import *
 from jax.random import randint, normal as randn
 import jax.numpy as np 
+import tqdm
 
 '''
 Full batch sampling -> return None, to indicate we use all of the training data
@@ -20,7 +21,7 @@ M = 1 gives pure stochastic gradient descent
 '''
 def minibatch_sampler(N, M):
     def sampler():
-        pass
+        return randint(jax.random.PRNGKey(0), (M,), 0, N)
     #
     return sampler
 #
@@ -42,7 +43,9 @@ You need to derive the "beta" and "gamma" from the above information, see Bottou
 '''
 def diminishing_step_size(start_step, end_step, T):
     def step_size(t):
-        pass
+        gamma = (end_step * T - start_step) / (start_step - end_step)
+        beta = (gamma + 1) * start_step
+        return beta / (gamma + t)
     #
     return step_size
 #
@@ -53,10 +56,12 @@ The `descent_direction` function here, and below, takes in (1) the gradient vect
 '''
 def gd():
     def descent_direction(gt, data_samples):
-        return gt
+        if data_samples is None:
+            return gt
+        else:
+            return gt / len(data_samples)
     #
     return descent_direction
-#
 
 '''
 Implement gradient descent with momentum.
@@ -64,11 +69,17 @@ The "momentum" variable represents ... momentum. E.g. when zero, then we revert 
 You will need to update a variable that maintains the (exponentially-weighted) averaged gradient, averaged over optimization
 '''
 def gd_with_momentum(momentum, D):
+    avg_grad = np.zeros(D)
+
     def descent_direction(gt, data_samples):
-        pass
+        nonlocal avg_grad
+        if data_samples is None:
+            avg_grad = momentum * avg_grad + gt
+        else:
+            avg_grad = momentum * avg_grad + gt / len(data_samples)
+        return avg_grad
     #
     return descent_direction
-#
 
 '''
 Implement the SAGA method. See Sec. 5.3.2. in Bottou et al. for details.
@@ -76,8 +87,18 @@ Assume that data samples is just one sample.
 The input `g0` is a list of gradients over all training data items, computed with respect to the weight vector initialization
 '''
 def saga(g0):
+    sum_grad = np.sum(g0, axis=0)
+    n = len(g0)
+
     def descent_direction(gt, data_samples):
-        pass
+        nonlocal g0, sum_grad
+
+        i = data_samples[0]  # Assume data_samples is just one sample
+        old_gi = g0[i]
+        g0[i] = gt
+        sum_grad += gt - old_gi
+        avg_grad = sum_grad / n
+        return gt - old_gi + avg_grad
     #
     return descent_direction
 #
@@ -98,6 +119,37 @@ During optimization, you should log at each step the loss from `loss_func`. This
     * First item is the weight vector upon termination of optimization
     * Second item is an array of losses.
 '''
-def optimize(w0, data_sampler, loss_func, descent_func, step_size, update_method, T):
-    pass
+from tqdm import tqdm
+
+def optimize(w0, data_sampler, loss_func, descent_func, step_size, update_method, T, verbose=False):
+    w = w0
+    losses = []
+
+    iterator = tqdm(range(T), desc="Optimizing", disable=not verbose)
+    for t in iterator:
+        data_samples = data_sampler()
+
+        # compute loss
+        loss = loss_func(w)
+        losses.append(loss)
+
+        # compute gradient
+        dir = descent_func(w, data_samples)
+        delta_w = update_method(dir, data_samples)
+
+        # update weight
+        alpha = step_size(t + 1)
+        w -= alpha * delta_w
+
+        if verbose:
+            iterator.set_postfix({
+                'Loss': f'{loss:.4f}',
+                'Step size': f'{alpha:.4f}',
+                'Update mag': f'{np.linalg.norm(alpha * delta_w):.4f}'
+            })
+
+    if verbose:
+        print(f"Optimization completed. Final loss: {losses[-1]:.4f}")
+
+    return (w, losses)
 #
