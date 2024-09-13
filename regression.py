@@ -67,10 +67,11 @@ class LogisticRegression:
     Compute and return the loss (NLL) averaged over the training dataset, given weight vector `w`.
     '''
     def train_loss(self, w, X=None, Y=None):
-        # -1/N * sum(y_i * log(sigmoid(w^T x_i)) + (1 - y_i) * log(1 - sigmoid(w^T x_i)))
         if X is None or Y is None:
             X, Y = self.X_train, self.Y_train
-        loss = -1/self.N * np.sum(Y * np.log(sigmoid(np.dot(X, w))) + (1 - Y) * np.log(1 - sigmoid(np.dot(X, w)))) 
+        N = X.shape[0]
+        loss = -1/N * np.sum(Y * np.log(sigmoid(np.dot(X, w))) + 
+                             (1 - Y) * np.log(1 - sigmoid(np.dot(X, w))))
         l2_loss = self.beta * np.linalg.norm(w)**2
         return loss + l2_loss
         
@@ -80,9 +81,9 @@ class LogisticRegression:
     Compute and return the loss (NLL) averaged over the validation dataset, given weight vector `w`.
     '''
     def validation_loss(self, w):
-        if X is None or Y is None:
-            X, Y = self.X_val, self.Y_val
-        loss = -1/self.N * np.sum(Y * np.log(sigmoid(np.dot(X, w))) + (1 - Y) * np.log(1 - sigmoid(np.dot(X, w)))) 
+        N_val = self.X_val.shape[0]
+        loss = -1/N_val * np.sum(self.Y_val * np.log(sigmoid(np.dot(self.X_val, w))) + 
+                                 (1 - self.Y_val) * np.log(1 - sigmoid(np.dot(self.X_val, w))))
         l2_loss = self.beta * np.linalg.norm(w)**2
         return loss + l2_loss
     #

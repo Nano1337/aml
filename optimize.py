@@ -20,9 +20,11 @@ Sample M integers from [0,N-1] uniformly at random with replacement
 M = 1 gives pure stochastic gradient descent
 '''
 def minibatch_sampler(N, M):
+    key = jax.random.PRNGKey(0)
     def sampler():
-        return randint(jax.random.PRNGKey(0), (M,), 0, N)
-    #
+        nonlocal key
+        key, subkey = jax.random.split(key)
+        return randint(subkey, (M,), 0, N)
     return sampler
 #
 
@@ -87,20 +89,24 @@ Assume that data samples is just one sample.
 The input `g0` is a list of gradients over all training data items, computed with respect to the weight vector initialization
 '''
 def saga(g0):
+    g0 = np.array(g0)
     sum_grad = np.sum(g0, axis=0)
     n = len(g0)
 
-    def descent_direction(gt, data_samples):
-        nonlocal g0, sum_grad
-
+    def descent_direction(gt, data_samples, g0, sum_grad):
         i = data_samples[0]  # Assume data_samples is just one sample
         old_gi = g0[i]
-        g0[i] = gt
-        sum_grad += gt - old_gi
-        avg_grad = sum_grad / n
-        return gt - old_gi + avg_grad
-    #
-    return descent_direction
+        new_g0 = g0.at[i].set(gt)
+        new_sum_grad = sum_grad + gt - old_gi
+        avg_grad = new_sum_grad / n
+        return gt - old_gi + avg_grad, new_g0, new_sum_grad
+
+    def wrapper(gt, data_samples):
+        nonlocal g0, sum_grad
+        result, g0, sum_grad = descent_direction(gt, data_samples, g0, sum_grad)
+        return result
+
+    return wrapper
 #
 
 '''
