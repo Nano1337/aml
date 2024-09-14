@@ -35,7 +35,6 @@ class LogisticRegression:
 
         self.beta = beta
 
-        self.key = jax.random.PRNGKey(0)
         #
 
     '''
@@ -43,7 +42,7 @@ class LogisticRegression:
     This should be initialized such that the following holds: taking the dot product between (1) the initialized weight vector and (2) an input vector whose entries are i.i.d. samples from a standard normal distribution gives, in expectation, a value of 1.
     '''
     def initialization(self):
-        w = randn(self.key, (self.D,))
+        w = randn(prng_key, (self.D,))
         return w / np.linalg.norm(w)
     #
 

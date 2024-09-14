@@ -20,11 +20,8 @@ Sample M integers from [0,N-1] uniformly at random with replacement
 M = 1 gives pure stochastic gradient descent
 '''
 def minibatch_sampler(N, M):
-    key = jax.random.PRNGKey(0)
     def sampler():
-        nonlocal key
-        key, subkey = jax.random.split(key)
-        return randint(subkey, (M,), 0, N)
+        return randint(grab_prng(), (M,), 0, N)
     return sampler
 #
 
